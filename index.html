@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GFS Data Explorer</title>
+    <!-- 
+        SUGGESTION: As an open source project, it's a good practice to include a license.
+        You can add a LICENSE file to your GitHub repository (e.g., MIT, Apache 2.0).
+     -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+        /* Custom scrollbar for results */
+        #results-container::-webkit-scrollbar {
+            width: 8px;
+        }
+        #results-container::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        #results-container::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+        #results-container::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+        .loader {
+            border-top-color: #3498db;
+            -webkit-animation: spin 1s linear infinite;
+            animation: spin 1s linear infinite;
+        }
+        @-webkit-keyframes spin {
+            0% { -webkit-transform: rotate(0deg); }
+            100% { -webkit-transform: rotate(360deg); }
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <div class="container mx-auto p-4 lg:p-6 max-w-7xl">
+        <!-- Header -->
+        <header class="mb-6 pb-4 border-b border-gray-300">
+            <h1 class="text-3xl font-bold text-gray-800">GFS Data Explorer</h1>
+            <p class="text-gray-600 mt-1">Discover, filter, and download GFS data from the NOAA Big Data Program on AWS S3.</p>
+        </header>
+
+        <div class="flex flex-col lg:flex-row gap-6">
+
+            <!-- Left Pane: Filters -->
+            <aside class="lg:w-1/3 bg-white p-6 rounded-xl shadow-md space-y-6 h-fit">
+                <h2 class="text-xl font-semibold border-b pb-3">Filter Criteria</h2>
+                
+                <div>
+                    <label for="date-selector" class="block text-sm font-medium text-gray-700 mb-1">Date (UTC)</label>
+                    <input type="date" id="date-selector" class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+
+                <div>
+                    <label for="cycle-selector" class="block text-sm font-medium text-gray-700 mb-1">Cycle Run Time (UTC)</label>
+                    <select id="cycle-selector" class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                        <option value="00">00Z</option>
+                        <option value="06">06Z</option>
+                        <option value="12" selected>12Z</option>
+                        <option value="18">18Z</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label for="product-selector" class="block text-sm font-medium text-gray-700 mb-1">Product Category</label>
+                    <select id="product-selector" class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                        <option value="pgrb2.0p25">GFS 0.25 deg (Core Params, pgrb2)</option>
+                        <option value="pgrb2.0p50">GFS 0.50 deg (Core Params, pgrb2)</option>
+                        <option value="pgrb2.1p00">GFS 1.00 deg (Core Params, pgrb2)</option>
+                        <option value="pgrb2b.0p25">GFS 0.25 deg (Extended Params, pgrb2b)</option>
+                        <option value="pgrb2full.0p50">GFS 0.50 deg (Full Params, pgrb2full)</option>
+                        <option value="sfluxgrb">GFS Surface Flux (sfluxgrb)</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label for="forecast-hour-selector" class="block text-sm font-medium text-gray-700 mb-1">Forecast Hour(s)</label>
+                    <input type="text" id="forecast-hour-selector" class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500" placeholder="e.g., 0, 3, 6-24, 48">
+                    <p class="text-xs text-gray-500 mt-1">Enter comma-separated values, ranges (e.g., 6-18), or leave blank for all.</p>
+                </div>
+
+                <button id="query-button" class="w-full bg-indigo-600 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 flex items-center justify-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" /></svg>
+                    Query GFS Data
+                </button>
+
+                <div class="pt-4 border-t">
+                     <label for="s3-path-display" class="block text-sm font-medium text-gray-700 mb-1">Generated S3 Path</label>
+                     <input id="s3-path-display" type="text" class="w-full p-2 bg-gray-100 border border-gray-300 rounded-md text-xs" readonly>
+                </div>
+            </aside>
+
+            <!-- Right Pane: Results -->
+            <main class="lg:w-2/3 bg-white p-6 rounded-xl shadow-md flex flex-col">
+                <div class="flex items-center justify-between border-b pb-3 mb-4">
+                     <h2 class="text-xl font-semibold">Results</h2>
+                     <div id="loader" class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-8 w-8 hidden"></div>
+                </div>
+
+                <div id="results-actions" class="flex items-center gap-4 mb-4 hidden">
+                    <div class="flex items-center">
+                        <input id="select-all-checkbox" type="checkbox" class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500">
+                        <label for="select-all-checkbox" class="ml-2 block text-sm text-gray-900">Select All</label>
+                    </div>
+                    <button id="download-button" class="bg-green-600 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
+                        Download Selected (<span id="selected-count">0</span>)
+                    </button>
+                    <p id="results-summary" class="text-sm text-gray-600 ml-auto"></p>
+                </div>
+
+                <div id="results-container" class="flex-grow overflow-y-auto pr-2 -mr-2 min-h-[300px]">
+                    <table id="results-table" class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50 sticky top-0">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"></th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Filename</th>
+                                <th class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">F-Hour</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Size</th>
+                            </tr>
+                        </thead>
+                        <tbody id="results-body" class="bg-white divide-y divide-gray-200">
+                            <!-- Results will be injected here -->
+                        </tbody>
+                    </table>
+                    <div id="message-area" class="text-center py-10 text-gray-500">
+                        Please select criteria and click "Query GFS Data" to begin.
+                    </div>
+                </div>
+
+                 <div class="mt-6 pt-4 border-t border-gray-200 bg-blue-50 p-4 rounded-lg">
+                    <h3 class="text-md font-semibold text-blue-800">Working with GRIB2 Data</h3>
+                    <p class="text-sm text-blue-700 mt-1">
+                        Downloaded files are in GRIB2 format. This is a standard for meteorological data but requires specialized software for viewing and analysis.
+                        Consider using tools like 
+                        <a href="https://metview.readthedocs.io/en/latest/" target="_blank" class="font-medium underline">Metview</a>, 
+                        or Python libraries like <a href="https://docs.xarray.dev/en/stable/" target="_blank" class="font-medium underline">xarray</a> with the `cfgrib` engine.
+                    </p>
+                </div>
+            </main>
+        </div>
+        
+        <!-- Page Footer -->
+        <footer class="mt-8 pt-6 border-t border-gray-300 text-center text-sm text-gray-500">
+            <p>
+                This is an open source project. Find the code on 
+                <a href="https://github.com/coliveir-aer/gfs-data-explorer" target="_blank" class="text-indigo-600 hover:underline">GitHub</a>.
+            </p>
+            <p class="mt-2">
+                Data Citation: NOAA Global Forecast System (GFS) was accessed from the
+                <a href="https://registry.opendata.aws/noaa-gfs-bdp-pds" target="_blank" class="text-indigo-600 hover:underline">AWS Open Data Registry</a>.
+            </p>
+        </footer>
+    </div>
+
+    <script>
+        // =================================================================================
+        // GFS DATA EXPLORER SCRIPT
+        // =================================================================================
+
+        // --- Constants & Configuration ---
+        const S3_BUCKET_URL_BASE = 'https://noaa-gfs-bdp-pds.s3.amazonaws.com/';
+        const S3_BUCKET_HOSTNAME = 'noaa-gfs-bdp-pds.s3.us-east-1.amazonaws.com';
+        const CORS_PROXY = 'https://api.allorigins.win/raw?url='; // Fallback for restrictive browser environments
+        const FETCH_TIMEOUT = 30000; // 30-second timeout for S3 requests
+        const DEBUG = true; // Enables detailed console logging for diagnostics
+
+        // --- DOM Element References ---
+        const dateSelector = document.getElementById('date-selector');
+        const cycleSelector = document.getElementById('cycle-selector');
+        const productSelector = document.getElementById('product-selector');
+        const forecastHourSelector = document.getElementById('forecast-hour-selector');
+        const queryButton = document.getElementById('query-button');
+        const s3PathDisplay = document.getElementById('s3-path-display');
+        const resultsTableBody = document.getElementById('results-body');
+        const messageArea = document.getElementById('message-area');
+        const loader = document.getElementById('loader');
+        const resultsActions = document.getElementById('results-actions');
+        const selectAllCheckbox = document.getElementById('select-all-checkbox');
+        const downloadButton = document.getElementById('download-button');
+        const selectedCountSpan = document.getElementById('selected-count');
+        const resultsSummary = document.getElementById('results-summary');
+
+        // --- Utility Functions ---
+
+        /**
+         * A simple logging utility for debugging.
+         * @param {string} message - The log message.
+         * @param {any} [data] - Optional data to log alongside the message.
+         */
+        function logDebug(message, data = '') {
+            if (DEBUG) {
+                console.log(`[GFS Explorer LOG] ${new Date().toISOString()}: ${message}`, data);
+            }
+        }
+
+        /**
+         * Formats file size from bytes to a human-readable string (KB, MB, GB).
+         * @param {number} bytes - Size in bytes.
+         * @returns {string} - The formatted size string.
+         */
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        /**
+         * Parses a user-provided forecast hour string into a Set of numbers.
+         * Handles single numbers (e.g., "3"), commas (e.g., "0,6,12"), and ranges (e.g., "6-18").
+         * @param {string} input - The input string from the user.
+         * @returns {Set<number> | null} A Set of forecast hours, or null if the input is empty to match all hours.
+         */
+        function parseForecastHours(input) {
+            if (!input.trim()) {
+                logDebug('Forecast hour input is empty, will match all hours.');
+                return null;
+            }
+            const hours = new Set();
+            const parts = input.split(',').map(p => p.trim());
+            for (const part of parts) {
+                if (part.includes('-')) {
+                    const [start, end] = part.split('-').map(Number);
+                    if (!isNaN(start) && !isNaN(end)) {
+                        for (let i = start; i <= end; i++) hours.add(i);
+                    }
+                } else {
+                    const num = Number(part);
+                    if (!isNaN(num)) hours.add(num);
+                }
+            }
+            logDebug('Parsed forecast hours', Array.from(hours));
+            return hours;
+        }
+
+        // --- UI Manipulation Functions ---
+
+        /**
+         * Manages the UI state, showing/hiding loaders and messages.
+         * @param {boolean} isLoading - Whether the application is in a loading state.
+         * @param {string|null} [message] - An optional message to display in the message area.
+         */
+        function setUIState(isLoading, message = null) {
+            queryButton.disabled = isLoading;
+            if (isLoading) {
+                loader.classList.remove('hidden');
+                queryButton.classList.add('opacity-50', 'cursor-not-allowed');
+                resultsTableBody.innerHTML = '';
+                messageArea.classList.add('hidden');
+                resultsActions.classList.add('hidden');
+            } else {
+                loader.classList.add('hidden');
+                queryButton.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+            if (message) {
+                messageArea.textContent = message;
+                messageArea.classList.remove('hidden');
+                resultsTableBody.innerHTML = '';
+                resultsActions.classList.add('hidden');
+            }
+        }
+
+        /**
+         * Updates the count of selected files and the state of the download button.
+         */
+        function updateSelectedCount() {
+            const selectedCheckboxes = document.querySelectorAll('#results-body input[type="checkbox"]:checked');
+            const count = selectedCheckboxes.length;
+            selectedCountSpan.textContent = count;
+            downloadButton.disabled = count === 0;
+            downloadButton.classList.toggle('opacity-50', count === 0);
+            downloadButton.classList.toggle('cursor-not-allowed', count === 0);
+        }
+
+        /**
+         * Populates the results table with the list of found files.
+         * @param {Array<object>} files - An array of file objects to display.
+         */
+        function updateResultsTable(files) {
+            resultsTableBody.innerHTML = '';
+            if (files.length === 0) {
+                setUIState(false, 'No GFS data found matching your criteria. Please try different selections.');
+                return;
+            }
+            files.forEach(file => {
+                const forecastHourMatch = file.key.match(/\.f(\d{3,4})/);
+                const forecastHour = forecastHourMatch ? parseInt(forecastHourMatch[1], 10) : 'N/A';
+                const row = document.createElement('tr');
+                row.classList.add('hover:bg-gray-100', 'transition-colors', 'duration-150');
+                row.innerHTML = `
+                    <td class="px-4 py-2 whitespace-nowrap">
+                        <input type="checkbox" data-fullkey="${file.fullKey}" class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 file-checkbox">
+                    </td>
+                    <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-800 font-medium">${file.key}</td>
+                    <td class="px-2 py-2 whitespace-nowrap text-sm text-gray-500">${forecastHour} hr</td>
+                    <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-500">${formatBytes(file.size)}</td>
+                `;
+                resultsTableBody.appendChild(row);
+            });
+            messageArea.classList.add('hidden');
+            resultsActions.classList.remove('hidden');
+            resultsSummary.textContent = `Found ${files.length} files.`;
+            document.querySelectorAll('.file-checkbox').forEach(cb => {
+                cb.addEventListener('change', updateSelectedCount);
+            });
+            updateSelectedCount();
+        }
+        
+        // --- Core Logic ---
+
+        /**
+         * Fetches data from a URL via a CORS proxy. Used as a fallback.
+         * @param {string} url - The original URL to fetch.
+         * @param {object} options - Fetch options (e.g., signal for aborting).
+         * @returns {Promise<Response>} A Promise that resolves to the Response object.
+         */
+        async function fetchWithProxy(url, options) {
+            const proxiedUrl = `${CORS_PROXY}${encodeURIComponent(url)}`;
+            logDebug('CORS issue detected or suspected. Retrying with proxy:', proxiedUrl);
+            return fetch(proxiedUrl, options);
+        }
+
+        /**
+         * Main function to query S3, filter results, and update the UI.
+         */
+        async function fetchGfsData() {
+            logDebug('Starting GFS data query.');
+            setUIState(true);
+
+            // 1. Get user selections from the UI.
+            const selectedDate = dateSelector.value.replace(/-/g, '');
+            const selectedCycle = cycleSelector.value;
+            const selectedProduct = productSelector.value;
+            const requestedHours = parseForecastHours(forecastHourSelector.value);
+            logDebug('User Selections:', { date: selectedDate, cycle: selectedCycle, product: selectedProduct, hours: requestedHours ? Array.from(requestedHours) : 'All' });
+            if (!selectedDate) {
+                setUIState(false, 'Please select a valid date.');
+                return;
+            }
+
+            // 2. Construct a specific S3 prefix to minimize the number of files returned by S3,
+            // avoiding irrelevant files like BUFR and improving performance.
+            const productIdentifier = `gfs.t${selectedCycle}z.${selectedProduct}`;
+            const s3Prefix = `gfs.${selectedDate}/${selectedCycle}/atmos/${productIdentifier}`;
+            const apiUrl = `https://${S3_BUCKET_HOSTNAME}/?list-type=2&prefix=${encodeURIComponent(s3Prefix)}`;
+            
+            s3PathDisplay.value = `s3://noaa-gfs-bdp-pds/${s3Prefix}`;
+            logDebug('Constructed specific S3 API URL for query:', apiUrl);
+            
+            // 3. Set up an AbortController for the fetch request to handle timeouts.
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
+
+            try {
+                let response;
+                // 4. Attempt a direct fetch first. This works in most modern browsers.
+                try {
+                    response = await fetch(apiUrl, { signal: controller.signal });
+                } catch (error) {
+                    // 5. If direct fetch fails, it's likely a CORS issue in a restrictive environment.
+                    // Retry the request using the CORS proxy as a fallback.
+                    if (error.name === 'TypeError' || error.name === 'AbortError') {
+                         clearTimeout(timeoutId);
+                         const proxyController = new AbortController();
+                         const proxyTimeoutId = setTimeout(() => proxyController.abort(), FETCH_TIMEOUT);
+                         response = await fetchWithProxy(apiUrl, { signal: proxyController.signal });
+                         clearTimeout(proxyTimeoutId);
+                    } else {
+                        throw error; // Re-throw other network errors.
+                    }
+                }
+                
+                clearTimeout(timeoutId); // Clear the timeout if the request was successful.
+
+                if (!response.ok) {
+                     const errorText = await response.text();
+                     throw new Error(`S3 API Error: Status ${response.status}. ${errorText.substring(0, 200)}`);
+                }
+                const xmlText = await response.text();
+                logDebug('Successfully fetched XML from S3.');
+
+                // 6. Parse the XML response from S3.
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(xmlText, "application/xml");
+                const errorNode = xmlDoc.querySelector('parsererror') || xmlDoc.querySelector('Error');
+                if (errorNode) {
+                    const code = xmlDoc.querySelector('Code')?.textContent;
+                    const message = xmlDoc.querySelector('Message')?.textContent;
+                    throw new Error(`S3 or XML parsing error: ${code || 'Unknown'} - ${message || errorNode.innerText}`);
+                }
+                const contents = xmlDoc.getElementsByTagName('Contents');
+                logDebug(`Found ${contents.length} objects matching the specific prefix.`);
+
+                // 7. Filter the returned file list by the user's selected forecast hours.
+                let filteredFiles = [];
+                for (let item of contents) {
+                    const fullKey = item.getElementsByTagName('Key')[0].textContent;
+                    const key = fullKey.split('/').pop();
+                    const size = parseInt(item.getElementsByTagName('Size')[0].textContent, 10);
+                    
+                    const forecastHourMatch = key.match(/\.f(\d{3,4})/);
+                    if (forecastHourMatch) {
+                        const forecastHour = parseInt(forecastHourMatch[1], 10);
+                        if (requestedHours === null || requestedHours.has(forecastHour)) {
+                            filteredFiles.push({ key, size, fullKey });
+                        }
+                    }
+                }
+                logDebug(`Filtered by forecast hour to ${filteredFiles.length} files.`);
+                
+                // 8. Sort the final list by forecast hour for a logical display order.
+                filteredFiles.sort((a, b) => {
+                    const fhrA = parseInt(a.key.match(/\.f(\d{3,4})/)[1], 10);
+                    const fhrB = parseInt(b.key.match(/\.f(\d{3,4})/)[1], 10);
+                    return fhrA - fhrB;
+                });
+
+                // 9. Update the UI with the final results.
+                updateResultsTable(filteredFiles);
+                setUIState(false);
+
+            } catch (error) {
+                clearTimeout(timeoutId); 
+                if (error.name === 'AbortError') {
+                    logDebug('Fetch aborted due to timeout.');
+                    setUIState(false, `Error: The request timed out after ${FETCH_TIMEOUT / 1000} seconds. The server may be slow. Please try again.`);
+                } else {
+                    logDebug('An error occurred during data fetching:', error);
+                    setUIState(false, `Error: ${error.message}`);
+                }
+            }
+        }
+        
+        /**
+         * Initiates the download of all user-selected files.
+         */
+        function downloadSelectedFiles() {
+            const selectedCheckboxes = document.querySelectorAll('#results-body input[type="checkbox"]:checked');
+            logDebug(`Initiating download for ${selectedCheckboxes.length} files.`);
+            selectedCheckboxes.forEach((checkbox, index) => {
+                const fullFileKey = checkbox.dataset.fullkey;
+                const fileName = fullFileKey.split('/').pop();
+                const downloadUrl = `${S3_BUCKET_URL_BASE}${fullFileKey}`;
+                
+                // Stagger downloads slightly to prevent browser pop-up blockers.
+                setTimeout(() => {
+                    logDebug(`Downloading: ${downloadUrl}`);
+                    const a = document.createElement('a');
+                    a.href = downloadUrl;
+                    a.download = fileName;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                }, index * 200);
+            });
+        }
+
+        // --- Event Listeners & Initialization ---
+        
+        /**
+         * Main entry point when the page is loaded. Sets up default values and event listeners.
+         */
+        window.addEventListener('load', () => {
+            logDebug('Page loaded. Initializing application.');
+            
+            // Set default date to yesterday UTC as recent data is more likely to be complete.
+            const yesterday = new Date();
+            yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+            dateSelector.value = yesterday.toISOString().split('T')[0];
+            logDebug('Default date set to:', dateSelector.value);
+
+            // Attach event listeners to UI controls.
+            queryButton.addEventListener('click', fetchGfsData);
+            downloadButton.addEventListener('click', downloadSelectedFiles);
+            selectAllCheckbox.addEventListener('change', () => {
+                const isChecked = selectAllCheckbox.checked;
+                document.querySelectorAll('.file-checkbox').forEach(cb => cb.checked = isChecked);
+                updateSelectedCount();
+            });
+            
+            // Allow pressing 'Enter' in the forecast hour input to trigger a query.
+            forecastHourSelector.addEventListener('keyup', (event) => {
+                if (event.key === 'Enter') {
+                    event.preventDefault(); // Prevent form submission behavior
+                    queryButton.click();
+                }
+            });
+        });
+
+    </script>
+</body>
+</html>
