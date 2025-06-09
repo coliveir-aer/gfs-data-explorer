@@ -2,6 +2,8 @@
 
 A simple, single-page web application to discover, filter, and download Global Forecast System (GFS) data from the NOAA Big Data Program archive on AWS S3. This tool is designed to provide an intuitive interface for accessing GFS GRIB2 files without needing to manually construct S3 paths or parse file listings.
 
+This tool is deployed via github pages at [https://coliveir-aer.github.io/gfs-data-explorer/](https://coliveir-aer.github.io/gfs-data-explorer/)
+
 ## **Features**
 
 * **Intuitive Filtering:** Filter GFS data by Date, Model Run Cycle (00Z, 06Z, 12Z, 18Z), Product Category (resolution and parameter sets), and specific Forecast Hours.  
