@@ -740,10 +740,15 @@
          * Initiates the download of all user-selected files.
          */
         function downloadSelectedFiles() {
-            const selectedCheckboxes = document.querySelectorAll('#results-body input[type="checkbox"]:checked');
-            logDebug(`Initiating download for ${selectedCheckboxes.length} files.`);
+            // Get only the visible and checked checkboxes
+            const selectedCheckboxes = Array.from(document.querySelectorAll('#results-body input[type="checkbox"]:checked')).filter(cb => {
+                const row = cb.closest('tr');
+                return row && row.style.display !== 'none';
+            });
+
+            logDebug(`Initiating download for ${selectedCheckboxes.length} visible and selected files.`);
             if (selectedCheckboxes.length === 0) {
-                showMessage('No files selected for download.', 'info');
+                showMessage('No files selected for download or no visible files selected.', 'info');
                 return;
             }
 
