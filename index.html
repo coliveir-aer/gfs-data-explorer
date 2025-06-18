@@ -782,12 +782,22 @@
                 // Parse the forecast hours into a Python list representation
                 const parsedHours = Array.from(parseForecastHours(forecastHoursInput) || []).sort((a,b) => a-b);
                 if (parsedHours.length > 0) {
-                    forecastHoursParam = `forecast_hours=${JSON.stringify(parsedHours)},`;
+                    forecastHoursParam = `forecast_hours: Optional[List[int]] = None,`;
                 }
+            }
+
+            const filterTextInput = fileFilterInput.value.trim().toLowerCase();
+            const filterModeInput = filterIncludeRadio.checked ? 'include' : 'exclude';
+
+            let filterParams = '';
+            if (filterTextInput) {
+                filterParams += `filename_filter: Optional[str] = "${filterTextInput}",\n    `;
+                filterParams += `filter_mode: str = "${filterModeInput}",`;
             }
 
             const pythonCode = `import boto3
 import os
+import re # For regular expressions to parse forecast hours
 from typing import List, Dict, Optional
 import botocore
 from botocore.config import Config # Import Config for unsigned requests
@@ -796,17 +806,18 @@ def query_gfs_data(
     date: str,
     cycle: str,
     product: str,
-    ${forecastHoursParam ? 'forecast_hours: Optional[List[int]] = None,' : ''}
+    ${forecastHoursParam ? `forecast_hours: Optional[List[int]] = None,\n    ` : ''}${filterParams ? `filename_filter: Optional[str] = None,\n    filter_mode: str = "include",` : ''}
     bucket_name: str = "${bucketName}"
 ) -> Dict:
     """
     Queries GFS data from the NOAA Open Data Dissemination program on AWS S3.
 
     Args:
-        date (str): The date inYYYYMMDD format (e.g., "20230115").
+        date (str): The date in YYYYMMDD format (e.g., "20230115").
         cycle (str): The GFS cycle run time (e.g., "00", "06", "12", "18").
         product (str): The GFS product category (e.g., "pgrb2.0p25", "pgrb2.0p50").
         ${forecastHoursParam ? 'forecast_hours (Optional[List[int]]): A list of specific forecast hours to filter by (e.g., [0, 3, 6]). If None, all available hours for the given prefix are returned.' : ''}
+        ${filterParams ? 'filename_filter (Optional[str]): A substring to filter filenames by. Case-insensitive.\n        filter_mode (str): "include" to keep files containing the substring, "exclude" to remove them. Default is "include".' : ''}
         bucket_name (str): The S3 bucket name. Default is "${bucketName}".
 
     Returns:
@@ -828,21 +839,27 @@ def query_gfs_data(
         if 'Contents' in page:
             for obj in page['Contents']:
                 full_key = obj['Key']
-                filename = os.path.basename(full_key)
+                filename_lower = os.path.basename(full_key).lower()
                 
+                # Apply filename filtering
+                if filename_filter:
+                    if filter_mode == "include" and filename_filter not in filename_lower:
+                        continue # Skip if include and filter text not found
+                    if filter_mode == "exclude" and filename_filter in filename_lower:
+                        continue # Skip if exclude and filter text found
+
                 # Extract forecast hour from filename for filtering
-                f_hour_match = filename.split('.f')[-1].split('.')[0]
-                if f_hour_match.isdigit():
-                    forecast_hour = int(f_hour_match)
-                else:
-                    forecast_hour = None # Or handle as error/unmatched
+                f_hour_match = re.search(r'\\.f(\\d{3,4})', filename_lower) # Use regex for robustness
+                forecast_hour = int(f_hour_match.group(1)) if f_hour_match else None
 
                 # Apply forecast hour filtering if specified
                 if forecast_hours is None or (forecast_hour is not None and forecast_hour in forecast_hours):
                     all_keys.append(full_key)
     
     # Sort keys by forecast hour for consistent order
-    all_keys.sort(key=lambda k: int(os.path.basename(k).split('.f')[-1].split('.')[0]) if '.f' in os.path.basename(k) else 0)
+    # Ensure keys are valid for sorting if forecast_hour is None
+    all_keys.sort(key=lambda k: int(re.search(r'\\.f(\\d{3,4})', os.path.basename(k).lower()).group(1)) if re.search(r'\\.f(\\d{3,4})', os.path.basename(k).lower()) else 0)
+
 
     return {"bucket_name": bucket_name, "keys": all_keys}
 
@@ -851,17 +868,24 @@ if __name__ == "__main__":
     current_date = "${date}"
     current_cycle = "${cycle}"
     current_product = "${product}"
-    current_forecast_hours = ${forecastHoursParam ? JSON.stringify(Array.from(parseForecastHours(forecastHoursInput) || []).sort((a,b) => a-b)) : 'None'}
+    current_forecast_hours = ${forecastHoursInput ? JSON.stringify(Array.from(parseForecastHours(forecastHoursInput) || []).sort((a,b) => a-b)) : 'None'}
+    current_filename_filter = ${filterTextInput ? `"${filterTextInput}"` : 'None'}
+    current_filter_mode = "${filterModeInput}"
 
     print(f"Attempting to query GFS data for Date: {current_date}, Cycle: {current_cycle}, Product: {current_product}")
     if current_forecast_hours is not None:
         print(f"Filtering for Forecast Hours: {current_forecast_hours}")
+    if current_filename_filter is not None:
+        print(f"Applying filename filter: '{current_filename_filter}' in '{current_filter_mode}' mode.")
+
 
     results = query_gfs_data(
         date=current_date, 
         cycle=current_cycle, 
         product=current_product, 
-        forecast_hours=current_forecast_hours
+        forecast_hours=current_forecast_hours,
+        filename_filter=current_filename_filter,
+        filter_mode=current_filter_mode
     )
 
     print("\\n--- Query Results ---")
