@@ -213,6 +213,12 @@
                 <div class="copy-tools-bubble">
                     <h3>Copy Tools</h3>
                     
+                    <!-- Python Code Generation Buttons -->
+                    <div class="py-2 mb-4 border-b border-gray-200 flex flex-col gap-2">
+                        <button id="copyQueryPythonBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-md shadow-sm w-full">Copy Query as Python Code</button>
+                        <button id="downloadPythonBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-md shadow-sm w-full">Python Code to Download Selected</button>
+                    </div>
+
                     <!-- Copy Links Panel -->
                     <div id="copyLinksPanel" class="hidden">
                         <h4>Copy Object Key</h4>
@@ -327,8 +333,9 @@
         // =================================================================================
 
         // --- Constants & Configuration ---
-        const S3_BUCKET_URL_BASE = 'https://noaa-gfs-bdp-pds.s3.amazonaws.com/';
-        const S3_BUCKET_HOSTNAME = 'noaa-gfs-bdp-pds.s3.us-east-1.amazonaws.com';
+        const S3_BUCKET_NAME = 'noaa-gfs-bdp-pds'; // Explicit bucket name for Python code
+        const S3_BUCKET_URL_BASE = `https://${S3_BUCKET_NAME}.s3.amazonaws.com/`;
+        const S3_BUCKET_HOSTNAME = `${S3_BUCKET_NAME}.s3.us-east-1.amazonaws.com`;
         const FETCH_TIMEOUT = 30000; // 30-second timeout for S3 requests
         const DEBUG = true; // Enables detailed console logging for diagnostics
 
@@ -363,6 +370,10 @@
         const fileFilterInput = document.getElementById('file-filter-input');
         const filterIncludeRadio = document.getElementById('filter-include');
         const filterExcludeRadio = document.getElementById('filter-exclude');
+
+        // References for new Python code buttons
+        const copyQueryPythonBtn = document.getElementById('copyQueryPythonBtn');
+        const downloadPythonBtn = document.getElementById('downloadPythonBtn');
 
 
         // Element for displaying temporary copy notifications
@@ -531,19 +542,27 @@
                 const selectedCheckbox = visibleCheckedCheckboxes[0];
                 const fullKey = selectedCheckbox.dataset.fullkey;
                 copyHttpsLinkBtn.onclick = () => copyToClipboard(`https://${S3_BUCKET_HOSTNAME}/${fullKey}`, 'HTTPS link');
-                copyS3LinkBtn.onclick = () => copyToClipboard(`s3://${S3_BUCKET_HOSTNAME.replace('.s3.us-east-1.amazonaws.com', '')}/${fullKey}`, 'S3 URI'); 
+                copyS3LinkBtn.onclick = () => copyToClipboard(`s3://${S3_BUCKET_NAME}/${fullKey}`, 'S3 URI'); 
             } else {
                 // Clear onclick handlers if not exactly 1 visible file is selected
                 copyHttpsLinkBtn.onclick = null;
                 copyS3LinkBtn.onclick = null;
             }
             
+            // Crucial fix: Always ensure jsonDisplayArea.value has a valid JSON string
             if (visibleCheckedCount >= 1) {
                 const visibleCheckedKeys = visibleCheckedCheckboxes.map(cb => cb.dataset.fullkey);
                 jsonDisplayArea.value = JSON.stringify({
                     http_prefix: `https://${S3_BUCKET_HOSTNAME}/`,
-                    s3_bucket: S3_BUCKET_HOSTNAME.replace('.s3.us-east-1.amazonaws.com', ''),
+                    s3_bucket: S3_BUCKET_NAME,
                     keys: visibleCheckedKeys
+                }, null, 2);
+            } else {
+                // When no files are selected, ensure it's a valid JSON with an empty keys list
+                jsonDisplayArea.value = JSON.stringify({
+                    http_prefix: `https://${S3_BUCKET_HOSTNAME}/`,
+                    s3_bucket: S3_BUCKET_NAME,
+                    keys: []
                 }, null, 2);
             }
         }
@@ -723,23 +742,229 @@
         function downloadSelectedFiles() {
             const selectedCheckboxes = document.querySelectorAll('#results-body input[type="checkbox"]:checked');
             logDebug(`Initiating download for ${selectedCheckboxes.length} files.`);
+            if (selectedCheckboxes.length === 0) {
+                showMessage('No files selected for download.', 'info');
+                return;
+            }
+
             selectedCheckboxes.forEach((checkbox, index) => {
                 const fullFileKey = checkbox.dataset.fullkey;
                 const fileName = fullFileKey.split('/').pop();
                 const downloadUrl = `${S3_BUCKET_URL_BASE}${fullFileKey}`;
                 
                 // Stagger downloads slightly to prevent browser pop-up blockers.
+                // A small delay helps ensure each download prompt is distinct.
                 setTimeout(() => {
-                    logDebug(`Downloading: ${downloadUrl}`);
+                    logDebug(`Attempting to download: ${downloadUrl}`);
                     const a = document.createElement('a');
                     a.href = downloadUrl;
-                    a.download = fileName;
+                    a.download = fileName; // Suggests a filename for saving
                     document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                }, index * 200);
+                    a.click(); // Programmatically click the link
+                    document.body.removeChild(a); // Clean up the element
+                }, index * 200); // 200ms delay between each download
             });
+            showMessage(`Initiated download for ${selectedCheckboxes.length} files. Please check your browser's download manager.`, 'success');
         }
+
+        /**
+         * Generates Python code to query GFS data from S3 using boto3.
+         */
+        function generatePythonQueryCode() {
+            const date = dateSelector.value.replace(/-/g, '');
+            const cycle = cycleSelector.value;
+            const product = productSelector.value;
+            const forecastHoursInput = forecastHourSelector.value.trim();
+            const bucketName = S3_BUCKET_NAME;
+
+            let forecastHoursParam = '';
+            if (forecastHoursInput) {
+                // Parse the forecast hours into a Python list representation
+                const parsedHours = Array.from(parseForecastHours(forecastHoursInput) || []).sort((a,b) => a-b);
+                if (parsedHours.length > 0) {
+                    forecastHoursParam = `forecast_hours=${JSON.stringify(parsedHours)},`;
+                }
+            }
+
+            const pythonCode = `import boto3
+import os
+from typing import List, Dict, Optional
+import botocore
+from botocore.config import Config # Import Config for unsigned requests
+
+def query_gfs_data(
+    date: str,
+    cycle: str,
+    product: str,
+    ${forecastHoursParam ? 'forecast_hours: Optional[List[int]] = None,' : ''}
+    bucket_name: str = "${bucketName}"
+) -> Dict:
+    """
+    Queries GFS data from the NOAA Open Data Dissemination program on AWS S3.
+
+    Args:
+        date (str): The date inYYYYMMDD format (e.g., "20230115").
+        cycle (str): The GFS cycle run time (e.g., "00", "06", "12", "18").
+        product (str): The GFS product category (e.g., "pgrb2.0p25", "pgrb2.0p50").
+        ${forecastHoursParam ? 'forecast_hours (Optional[List[int]]): A list of specific forecast hours to filter by (e.g., [0, 3, 6]). If None, all available hours for the given prefix are returned.' : ''}
+        bucket_name (str): The S3 bucket name. Default is "${bucketName}".
+
+    Returns:
+        Dict: A dictionary containing the bucket name and a list of full S3 object keys.
+              Example: {"bucket_name": "noaa-gfs-bdp-pds", "keys": ["gfs.20230115/00/atmos/gfs.t00z.pgrb2.0p25.f000.grib2", ...]}
+    """
+    # Use unsigned requests for public buckets
+    s3_client = boto3.client('s3', config=Config(signature_version=botocore.UNSIGNED))
+    
+    # Construct the S3 prefix based on input parameters
+    s3_prefix = f"gfs.{date}/{cycle}/atmos/gfs.t{cycle}z.{product}"
+    print(f"Querying S3 prefix: s3://{bucket_name}/{s3_prefix}")
+
+    all_keys = []
+    paginator = s3_client.get_paginator('list_objects_v2')
+    pages = paginator.paginate(Bucket=bucket_name, Prefix=s3_prefix)
+
+    for page in pages:
+        if 'Contents' in page:
+            for obj in page['Contents']:
+                full_key = obj['Key']
+                filename = os.path.basename(full_key)
+                
+                # Extract forecast hour from filename for filtering
+                f_hour_match = filename.split('.f')[-1].split('.')[0]
+                if f_hour_match.isdigit():
+                    forecast_hour = int(f_hour_match)
+                else:
+                    forecast_hour = None # Or handle as error/unmatched
+
+                # Apply forecast hour filtering if specified
+                if forecast_hours is None or (forecast_hour is not None and forecast_hour in forecast_hours):
+                    all_keys.append(full_key)
+    
+    # Sort keys by forecast hour for consistent order
+    all_keys.sort(key=lambda k: int(os.path.basename(k).split('.f')[-1].split('.')[0]) if '.f' in os.path.basename(k) else 0)
+
+    return {"bucket_name": bucket_name, "keys": all_keys}
+
+# Example usage with current UI parameters:
+if __name__ == "__main__":
+    current_date = "${date}"
+    current_cycle = "${cycle}"
+    current_product = "${product}"
+    current_forecast_hours = ${forecastHoursParam ? JSON.stringify(Array.from(parseForecastHours(forecastHoursInput) || []).sort((a,b) => a-b)) : 'None'}
+
+    print(f"Attempting to query GFS data for Date: {current_date}, Cycle: {current_cycle}, Product: {current_product}")
+    if current_forecast_hours is not None:
+        print(f"Filtering for Forecast Hours: {current_forecast_hours}")
+
+    results = query_gfs_data(
+        date=current_date, 
+        cycle=current_cycle, 
+        product=current_product, 
+        forecast_hours=current_forecast_hours
+    )
+
+    print("\\n--- Query Results ---")
+    print(f"Bucket: {results['bucket_name']}")
+    print(f"Found {len(results['keys'])} keys.")
+    for key in results['keys'][:5]: # Print first 5 keys as example
+        print(f"- {key}")
+    if len(results['keys']) > 5:
+        print(f"... and {len(results['keys']) - 5} more.")
+`;
+            copyToClipboard(pythonCode, 'Python Query Code');
+        }
+
+        /**
+         * Generates Python code to download files based on a provided JSON list.
+         */
+        function generatePythonDownloadCode() {
+            const currentJsonData = jsonDisplayArea.value; // This now reliably contains valid JSON
+            const bucketName = S3_BUCKET_NAME;
+
+            let parsedJson = {};
+            try {
+                parsedJson = JSON.parse(currentJsonData);
+            } catch (e) {
+                // This catch block should ideally not be hit with the fix in updateSelectedCount
+                showMessage("Error parsing selected files JSON. Please ensure valid selections.", 'error');
+                logDebug("Error parsing JSON for Python download code:", e);
+                return;
+            }
+
+            // This check ensures we don't generate code that will immediately say "no files"
+            // if the user hasn't selected anything or the query yielded nothing.
+            // The Python script itself will also handle the 'keys' list being empty.
+            if (!parsedJson.keys || parsedJson.keys.length === 0) {
+                 showMessage("No files selected to generate download code. Please select files in the table first.", 'info');
+                 return;
+            }
+
+            // The content to be inserted into Python code.
+            // Ensure it's pretty-printed for readability in the generated Python.
+            const jsonForPython = JSON.stringify(parsedJson, null, 4);
+
+
+            const pythonCode = `import boto3
+import os
+import json
+from typing import Dict, List
+import botocore
+from botocore.config import Config # Import Config for unsigned requests
+
+def download_gfs_files(
+    gfs_data_json: Dict,
+    output_folder: str = "gfs_downloads"
+):
+    """
+    Downloads GFS files from S3 based on a provided JSON data structure.
+
+    Args:
+        gfs_data_json (Dict): A dictionary containing 's3_bucket' and 'keys'
+                              (list of S3 object keys).
+                              Example: {"s3_bucket": "noaa-gfs-bdp-pds", "keys": ["key1", "key2"]}
+        output_folder (str): The local directory where files will be downloaded.
+    """
+    if not gfs_data_json or "s3_bucket" not in gfs_data_json or "keys" not in gfs_data_json:
+        print("Error: Invalid JSON data provided. Expected dictionary with 's3_bucket' and 'keys'.")
+        return
+
+    s3_bucket = gfs_data_json["s3_bucket"]
+    s3_keys = gfs_data_json["keys"]
+
+    if not s3_keys:
+        print("No files to download in the provided JSON data.")
+        return
+
+    # Use unsigned requests for public buckets
+    s3_client = boto3.client('s3', config=Config(signature_version=botocore.UNSIGNED))
+    
+    # Create the output folder if it doesn't exist
+    os.makedirs(output_folder, exist_ok=True)
+    print(f"Ensuring output directory '{output_folder}' exists.")
+
+    print(f"Starting download of {len(s3_keys)} files from bucket '{s3_bucket}' to '{output_folder}'...")
+    for i, s3_key in enumerate(s3_keys):
+        local_filepath = os.path.join(output_folder, os.path.basename(s3_key))
+        try:
+            print(f"[{i+1}/{len(s3_keys)}] Downloading s3://{s3_bucket}/{s3_key} to {local_filepath}")
+            s3_client.download_file(s3_bucket, s3_key, local_filepath)
+            print(f"Downloaded: {os.path.basename(s3_key)}")
+        except Exception as e:
+            print(f"Error downloading {s3_key}: {e}")
+    print("Download process complete.")
+
+# Example usage with the current selected files (assuming this JSON is loaded dynamically):
+if __name__ == "__main__":
+    # This dictionary would typically be loaded from a file or another source.
+    # For demonstration, it reflects the content of the "Selected Files JSON" area.
+    selected_gfs_files = ${jsonForPython}
+
+    download_gfs_files(selected_gfs_files)
+`;
+            copyToClipboard(pythonCode, 'Python Download Code');
+        }
+
 
         // --- Event Listeners & Initialization ---
         
@@ -789,6 +1014,10 @@
             fileFilterInput.addEventListener('input', applyFilter);
             filterIncludeRadio.addEventListener('change', applyFilter);
             filterExcludeRadio.addEventListener('change', applyFilter);
+
+            // Event listeners for Python code generation buttons
+            copyQueryPythonBtn.addEventListener('click', generatePythonQueryCode);
+            downloadPythonBtn.addEventListener('click', generatePythonDownloadCode);
 
             // Initial event listeners for the copy buttons (will be dynamically overridden)
             copyHttpsLinkBtn.addEventListener('click', () => { /* Handled by dynamic onclick */ });
