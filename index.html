@@ -740,10 +740,15 @@
          * Initiates the download of all user-selected files.
          */
         function downloadSelectedFiles() {
-            const selectedCheckboxes = document.querySelectorAll('#results-body input[type="checkbox"]:checked');
-            logDebug(`Initiating download for ${selectedCheckboxes.length} files.`);
+            // Get only the visible and checked checkboxes
+            const selectedCheckboxes = Array.from(document.querySelectorAll('#results-body input[type="checkbox"]:checked')).filter(cb => {
+                const row = cb.closest('tr');
+                return row && row.style.display !== 'none';
+            });
+
+            logDebug(`Initiating download for ${selectedCheckboxes.length} visible and selected files.`);
             if (selectedCheckboxes.length === 0) {
-                showMessage('No files selected for download.', 'info');
+                showMessage('No files selected for download or no visible files selected.', 'info');
                 return;
             }
 
@@ -813,7 +818,7 @@ def query_gfs_data(
     Queries GFS data from the NOAA Open Data Dissemination program on AWS S3.
 
     Args:
-        date (str): The date in YYYYMMDD format (e.g., "20230115").
+        date (str): The date inYYYYMMDD format (e.g., "20230115").
         cycle (str): The GFS cycle run time (e.g., "00", "06", "12", "18").
         product (str): The GFS product category (e.g., "pgrb2.0p25", "pgrb2.0p50").
         ${forecastHoursParam ? 'forecast_hours (Optional[List[int]]): A list of specific forecast hours to filter by (e.g., [0, 3, 6]). If None, all available hours for the given prefix are returned.' : ''}
