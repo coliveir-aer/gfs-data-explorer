@@ -5,146 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GFS Data Explorer</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #f3f4f6;
-        }
-        /* Custom scrollbar for results */
-        #results-container::-webkit-scrollbar {
-            width: 8px;
-        }
-        #results-container::-webkit-scrollbar-track {
-            background: #f1f1f1;
-        }
-        #results-container::-webkit-scrollbar-thumb {
-            background: #888;
-            border-radius: 4px;
-        }
-        #results-container::-webkit-scrollbar-thumb:hover {
-            background: #555;
-        }
-        .loader {
-            border-top-color: #3498db;
-            -webkit-animation: spin 1s linear infinite;
-            animation: spin 1s linear infinite;
-        }
-        @-webkit-keyframes spin {
-            0% { -webkit-transform: rotate(0deg); }
-            100% { -webkit-transform: rotate(360deg); }
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        /* Styles for JSON and copy link panels */
-        .copy-link-group {
-            display: flex;
-            gap: 8px;
-            margin-top: 16px;
-            flex-wrap: wrap; /* Allow buttons to wrap if space is too narrow */
-            justify-content: flex-start; /* Align buttons to the start */
-        }
-        .copy-link-group button {
-            background-color: #10b981; /* Green for copy */
-            color: white;
-            padding: 10px 16px;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background-color 0.2s ease-in-out;
-            white-space: nowrap; /* Prevent text wrapping */
-        }
-        .copy-link-group button:hover {
-            background-color: #059669;
-        }
-        
-        #jsonDisplayArea {
-             width: 100%;
-             height: 80px; /* Reduced height for compactness */
-             padding: 12px;
-             margin-bottom: 12px;
-             font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
-             font-size: 0.9rem;
-             border: 1px solid #cbd5e1;
-             border-radius: 8px;
-             background-color: white;
-             resize: vertical; /* Allow vertical resize only */
-        }
-        .message-box {
-            border-radius: 8px;
-            padding: 12px;
-            margin-top: 16px;
-            transition: opacity 0.3s ease-in-out;
-            text-align: center; /* Center the message text */
-            margin-left: auto; /* Center the box itself */
-            margin-right: auto; /* Center the box itself */
-            max-width: fit-content; /* Adjust width to content */
-        }
-
-        /* Styles for the copy link and JSON panels */
-        #copyLinksPanel, #jsonOutputPanel {
-            background-color: #eff6ff; /* Light blue background */
-            border: 1px solid #bfdbfe; /* Blue border */
-            border-radius: 8px;
-            padding: 12px 16px; /* Consistent padding */
-            margin-top: 16px; /* Space between sections */
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-        }
-        #copyLinksPanel h4, #jsonOutputPanel h4 {
-            font-weight: 600;
-            color: #1e40af; /* Darker blue for titles */
-            margin-bottom: 10px; /* Space below title */
-        }
-
-        /* Style for the copy tools bubble */
-        .copy-tools-bubble {
-            background-color: #ffffff; /* White background for the bubble */
-            border-radius: 12px;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05); /* Lighter shadow for nested bubble */
-            padding: 16px;
-            margin-top: 24px; /* Space from filter section */
-            border: 1px solid #e2e8f0; /* Light border */
-        }
-        .copy-tools-bubble h3 {
-            font-size: 1.125rem; /* text-lg */
-            font-weight: 600; /* font-semibold */
-            color: #334155; /* text-gray-700 */
-            margin-bottom: 1rem; /* mb-4 */
-            padding-bottom: 0.75rem; /* pb-3 */
-            border-bottom: 1px solid #e2e8f0; /* border-b */
-        }
-
-        /* Styles for the left filter/tools panel (aside) to enable sticky scrolling */
-        aside {
-            position: sticky;
-            top: 20px; /* Aligns with body top padding */
-            max-height: calc(100vh - 40px); /* 100vh minus 20px top and 20px bottom body padding */
-            overflow-y: auto; /* Enable internal scrolling for the aside content */
-        }
-
-        /* Specific styles for the filter input to prevent wrapping with radio buttons */
-        #file-filter-input {
-            width: 180px; /* Fixed width or max-width to control size */
-        }
-        .filter-options-group {
-             display: flex;
-             align-items: center;
-             gap: 8px; /* Space between filter input and radio buttons */
-             flex-wrap: wrap; /* Allow wrapping if space is extremely tight */
-        }
-        .filter-mode-radios {
-            display: flex;
-            align-items: center;
-            gap: 12px; /* Space between radio button pairs */
-        }
-        .filter-mode-radios label {
-            white-space: nowrap; /* Prevent "Include" and "Exclude" labels from wrapping */
-        }
-    </style>
-    <!-- Google tag (gtag.js) - CORRECTLY PLACED IN HEAD -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script> <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="style.css" rel="stylesheet">
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-S1GZVR1HPX"></script>
     <script>
       window.dataLayer = window.dataLayer || [];
@@ -156,18 +18,16 @@
 </head>
 <body class="text-gray-800">
 
-    <div class="container mx-auto p-4 lg:p-6 max-w-7xl">
-        <!-- Header -->
+    <div class="container mx-auto p-4 lg:p-6 max-w-full">
         <header class="mb-6 pb-4 border-b border-gray-300">
             <h1 class="text-3xl font-bold text-gray-800">GFS Data Explorer</h1>
             
             <p class="text-gray-600 mt-1">Discover, filter, and download GFS data from the NOAA Open Data Dissemination program on AWS S3.</p>
         </header>
 
-        <div class="flex flex-col lg:flex-row gap-6">
+        <div id="main-container" class="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
-            <!-- Left Pane: Filters and Copy Tools -->
-            <aside class="lg:w-1/3 bg-white p-6 rounded-xl shadow-md space-y-6">
+            <aside class="lg:col-span-3 bg-white p-6 rounded-xl shadow-md space-y-6">
                 <h2 class="text-xl font-semibold border-b pb-3">Filter Criteria</h2>
                 
                 <div>
@@ -190,7 +50,7 @@
                     <select id="product-selector" class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
                         <option value="pgrb2.0p25">GFS 0.25 deg (Core Params, pgrb2)</option>
                         <option value="pgrb2.0p50">GFS 0.50 deg (Core Params, pgrb2)</option>
-                        <option value="pgrb2.1p00">GFS 1.00 deg (Core Params, pgrb2)</option>
+                        <option value="pgrb2.1p00" selected>GFS 1.00 deg (Core Params, pgrb2)</option>
                         <option value="pgrb2b.0p25">GFS 0.25 deg (Extended Params, pgrb2b)</option>
                         <option value="pgrb2full.0p50">GFS 0.50 deg (Full Params, pgrb2full)</option>
                     </select>
@@ -209,17 +69,14 @@
                     Query GFS Data
                 </button>
 
-                <!-- Copy Tools Bubble -->
                 <div class="copy-tools-bubble">
                     <h3>Copy Tools</h3>
                     
-                    <!-- Python Code Generation Buttons -->
                     <div class="py-2 mb-4 border-b border-gray-200 flex flex-col gap-2">
                         <button id="copyQueryPythonBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-md shadow-sm w-full">Copy Query as Python Code</button>
                         <button id="downloadPythonBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-md shadow-sm w-full">Python Code to Download Selected</button>
                     </div>
 
-                    <!-- Copy Links Panel -->
                     <div id="copyLinksPanel" class="hidden">
                         <h4>Copy Object Key</h4>
                         <p class="text-sm text-gray-600 mb-4">Click a button below to copy the selected file's link.</p>
@@ -229,7 +86,6 @@
                         </div>
                     </div>
 
-                    <!-- JSON Output Panel -->
                     <div id="jsonOutputPanel" class="hidden">
                         <h4>Selected Files JSON</h4>
                         <div>
@@ -238,11 +94,9 @@
                         </div>
                     </div>
                 </div>
-                <!-- End Copy Tools Bubble -->
-            </aside>
+                </aside>
 
-            <!-- Right Pane: Results -->
-            <main class="lg:w-2/3 bg-white p-6 rounded-xl shadow-md flex flex-col">
+            <main id="results-column" class="lg:col-span-9 bg-white p-6 rounded-xl shadow-md flex flex-col">
                 <div class="mb-4">
                      <label for="s3-path-display" class="block text-sm font-medium text-gray-700 mb-1">Generated S3 Path</label>
                      <input id="s3-path-display" type="text" class="w-full p-2 bg-gray-100 border border-gray-300 rounded-md text-xs" readonly>
@@ -259,7 +113,6 @@
                         <label for="select-all-checkbox" class="ml-2 block text-sm text-gray-900">Select All</label>
                     </div>
 
-                    <!-- File Filter Elements -->
                     <div class="filter-options-group">
                         <input type="text" id="file-filter-input" placeholder="Filter filenames..." class="p-2 border border-gray-300 rounded-md shadow-sm text-sm">
                         <div class="filter-mode-radios">
@@ -269,11 +122,12 @@
                             <label for="filter-exclude" class="text-sm text-gray-700">Exclude</label>
                         </div>
                     </div>
-                    <!-- End File Filter Elements -->
-
                     <button id="download-button" class="bg-green-600 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 flex items-center gap-2">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
                         Download Selected (<span id="selected-count">0</span>)
+                    </button>
+                     <button id="define-subset-button" class="bg-purple-600 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500">
+                        Create Subset from Selected
                     </button>
                     <p id="results-summary" class="text-sm text-gray-600 ml-auto"></p>
                 </div>
@@ -289,14 +143,12 @@
                             </tr>
                         </thead>
                         <tbody id="results-body" class="bg-white divide-y divide-gray-200">
-                            <!-- Results will be injected here -->
-                        </tbody>
+                            </tbody>
                     </table>
                     <div id="message-area" class="text-center py-10 text-gray-500">
                         Please select criteria and click "Query GFS Data" to begin.
                     </div>
                 </div>
-
                  <div class="mt-6 pt-4 border-t border-gray-200 bg-blue-50 p-4 rounded-lg">
                     <h3 class="text-md font-semibold text-blue-800">Working with GRIB2 Data</h3>
                     <p class="text-sm text-blue-700 mt-1">
@@ -307,9 +159,28 @@
                     </p>
                 </div>
             </main>
+            
+            <aside id="inventory-column" class="lg:col-span-4 bg-white p-6 rounded-xl shadow-md flex-col hidden" data-grib-file-key="">
+                <div class="flex justify-between items-center mb-3 border-b pb-3">
+                    <h2 class="text-xl font-semibold">GRIB Inventory</h2>
+                    <button id="close-inventory-btn" class="text-gray-500 hover:text-gray-800 text-2xl font-bold">&times;</button>
+                </div>
+
+                <div class="space-y-3">
+                    <input type="text" id="inventory-filter-input" placeholder="Filter products..." class="w-full p-2 border border-gray-300 rounded-md shadow-sm text-sm focus:ring-indigo-500 focus:border-indigo-500">
+                    
+                    <div class="grid grid-cols-3 gap-2">
+                        <button id="download-subset-btn" class="col-span-2 w-full bg-green-600 text-white font-semibold py-2 px-3 rounded-md shadow-sm hover:bg-green-700 text-sm">Download GRIB Subset</button>
+                        <button id="clear-all-btn" class="w-full bg-gray-400 text-white font-semibold py-2 px-3 rounded-md shadow-sm hover:bg-gray-500 text-sm">Clear All</button>
+                    </div>
+                </div>
+
+                <div id="inventory-list-container" class="flex-grow overflow-y-auto pr-2 -mr-2 mt-4">
+                     </div>
+            </aside>
+
         </div>
         
-        <!-- Page Footer -->
         <footer class="mt-8 pt-6 border-t border-gray-300 text-center text-sm text-gray-500">
             <p class="mb-2">
                 This is an open source project. Find the code on 
@@ -326,732 +197,6 @@
             </p>
         </footer>
     </div>
-
-    <script>
-        // =================================================================================
-        // GFS DATA EXPLORER SCRIPT
-        // =================================================================================
-
-        // --- Constants & Configuration ---
-        const S3_BUCKET_NAME = 'noaa-gfs-bdp-pds'; // Explicit bucket name for Python code
-        const S3_BUCKET_URL_BASE = `https://${S3_BUCKET_NAME}.s3.amazonaws.com/`;
-        const S3_BUCKET_HOSTNAME = `${S3_BUCKET_NAME}.s3.us-east-1.amazonaws.com`;
-        const FETCH_TIMEOUT = 30000; // 30-second timeout for S3 requests
-        const DEBUG = true; // Enables detailed console logging for diagnostics
-
-        // --- Global State ---
-        let allFetchedFiles = []; // Stores all files fetched from S3 for current query (unfiltered)
-
-        // --- DOM Element References ---
-        const dateSelector = document.getElementById('date-selector');
-        const cycleSelector = document.getElementById('cycle-selector');
-        const productSelector = document.getElementById('product-selector');
-        const forecastHourSelector = document.getElementById('forecast-hour-selector');
-        const queryButton = document.getElementById('query-button');
-        const s3PathDisplay = document.getElementById('s3-path-display');
-        const resultsTableBody = document.getElementById('results-body');
-        const messageArea = document.getElementById('message-area');
-        const loader = document.getElementById('loader');
-        const resultsActions = document.getElementById('results-actions');
-        const selectAllCheckbox = document.getElementById('select-all-checkbox');
-        const downloadButton = document.getElementById('download-button');
-        const selectedCountSpan = document.getElementById('selected-count');
-        const resultsSummary = document.getElementById('results-summary');
-
-        // References for copy link functionality elements
-        const copyLinksPanel = document.getElementById('copyLinksPanel');
-        const copyHttpsLinkBtn = document.getElementById('copyHttpsLinkBtn');
-        const copyS3LinkBtn = document.getElementById('copyS3LinkBtn'); 
-        const jsonOutputPanel = document.getElementById('jsonOutputPanel');
-        const jsonDisplayArea = document.getElementById('jsonDisplayArea');
-        const copyJsonBtn = document.getElementById('copyJsonBtn');
-
-        // References for new filter elements
-        const fileFilterInput = document.getElementById('file-filter-input');
-        const filterIncludeRadio = document.getElementById('filter-include');
-        const filterExcludeRadio = document.getElementById('filter-exclude');
-
-        // References for new Python code buttons
-        const copyQueryPythonBtn = document.getElementById('copyQueryPythonBtn');
-        const downloadPythonBtn = document.getElementById('downloadPythonBtn');
-
-
-        // Element for displaying temporary copy notifications
-        const messageBox = document.createElement('div'); 
-        messageBox.className = 'message-box opacity-0 hidden';
-        // Append it to the main container, before the footer for better visibility
-        document.querySelector('.container').insertBefore(messageBox, document.querySelector('footer')); 
-
-
-        // --- Utility Functions ---
-
-        /**
-         * A simple logging utility for debugging.
-         * @param {string} message - The log message.
-         * @param {any} [data] - Optional data to log alongside the message.
-         */
-        function logDebug(message, data = '') {
-            if (DEBUG) {
-                console.log(`[GFS Explorer LOG] ${new Date().toISOString()}: ${message}`, data);
-            }
-        }
-
-        /**
-         * Formats file size from bytes to a human-readable string (KB, MB, GB).
-         * @param {number} bytes - Size in bytes.
-         * @returns {string} - The formatted size string.
-         */
-        function formatBytes(bytes) {
-            if (bytes === 0) return '0 Bytes';
-            const k = 1024;
-            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-        }
-
-        /**
-         * Parses a user-provided forecast hour string into a Set of numbers.
-         * Handles single numbers (e.g., "3"), commas (e.g., "0,6,12"), and ranges (e.g., "6-18").
-         * @param {string} input - The input string from the user.
-         * @returns {Set<number> | null} A Set of forecast hours, or null if the input is empty to match all hours.
-         */
-        function parseForecastHours(input) {
-            if (!input.trim()) {
-                logDebug('Forecast hour input is empty, will match all hours.');
-                return null;
-            }
-            const hours = new Set();
-            const parts = input.split(',').map(p => p.trim());
-            for (const part of parts) {
-                if (part.includes('-')) {
-                    const [start, end] = part.split('-').map(Number);
-                    if (!isNaN(start) && !isNaN(end)) {
-                        for (let i = start; i <= end; i++) hours.add(i);
-                    }
-                } else {
-                    const num = Number(part);
-                    if (!isNaN(num)) hours.add(num);
-                }
-            }
-            logDebug('Parsed forecast hours', Array.from(hours));
-            return hours;
-        }
-
-        /**
-         * Displays a temporary message to the user (e.g., "Copied to clipboard!").
-         * @param {string} message - The message to display.
-         * @param {'success'|'info'|'error'} type - The type of message to determine styling.
-         */
-        function showMessage(message, type) {
-            messageBox.textContent = message;
-            messageBox.className = `message-box p-4 rounded-lg opacity-100 ${
-                type === 'success' ? 'bg-green-100 text-green-700' : 
-                type === 'info' ? 'bg-blue-100 text-blue-700' :
-                'bg-red-100 text-red-700'
-            }`;
-            messageBox.classList.remove('hidden');
-            setTimeout(() => {
-                messageBox.classList.add('opacity-0');
-                setTimeout(() => messageBox.classList.add('hidden'), 300); // Hide fully after fade
-            }, 3000); // Message visible for 3 seconds
-        }
-
-        /**
-         * Copies text to the clipboard and shows a message.
-         * @param {string} text - The text to copy.
-         * @param {string} typeName - A user-friendly name for what was copied (e.g., "HTTPS link").
-         */
-        async function copyToClipboard(text, typeName) {
-            if (!text) {
-                showMessage(`No ${typeName} to copy.`, 'info');
-                return;
-            }
-            try {
-                // Fallback to execCommand for broader compatibility in iframe environments.
-                const textarea = document.createElement('textarea');
-                textarea.value = text;
-                document.body.appendChild(textarea);
-                textarea.select();
-                document.execCommand('copy');
-                document.body.removeChild(textarea);
-                showMessage(`${typeName} copied to clipboard!`, 'success');
-            } catch (err) {
-                console.error('Failed to copy to clipboard:', err);
-                showMessage(`Failed to copy ${typeName}. Please copy manually.`, 'error');
-            }
-        }
-
-
-        // --- UI Manipulation Functions ---
-
-        /**
-         * Manages the UI state, showing/hiding loaders and messages.
-         * @param {boolean} isLoading - Whether the application is in a loading state.
-         * @param {string|null} [message] - An optional message to display in the message area.
-         */
-        function setUIState(isLoading, message = null) {
-            queryButton.disabled = isLoading;
-            if (isLoading) {
-                loader.classList.remove('hidden');
-                queryButton.classList.add('opacity-50', 'cursor-not-allowed');
-                resultsTableBody.innerHTML = '';
-                messageArea.classList.add('hidden');
-                resultsActions.classList.add('hidden');
-                // Hide copy panels when a new query starts
-                copyLinksPanel.classList.add('hidden');
-                jsonOutputPanel.classList.add('hidden');
-            } else {
-                loader.classList.add('hidden');
-                queryButton.classList.remove('opacity-50', 'cursor-not-allowed');
-            }
-            if (message) {
-                messageArea.textContent = message;
-                messageArea.classList.remove('hidden');
-                resultsTableBody.innerHTML = '';
-                resultsActions.classList.add('hidden');
-                copyLinksPanel.classList.add('hidden');
-                jsonOutputPanel.classList.add('hidden');
-            }
-        }
-
-        /**
-         * Updates the count of selected files and the state of the download button.
-         * Also updates the visibility and content of the copy link panels based on *visible* selections.
-         */
-        function updateSelectedCount() {
-            let visibleCheckedCount = 0;
-            const allCheckboxes = document.querySelectorAll('#results-body input[type="checkbox"]');
-            
-            // Count only checkboxes that are checked AND whose parent row is visible
-            const visibleCheckedCheckboxes = Array.from(allCheckboxes).filter(cb => {
-                const row = cb.closest('tr');
-                return row && row.style.display !== 'none' && cb.checked;
-            });
-            visibleCheckedCount = visibleCheckedCheckboxes.length;
-
-            selectedCountSpan.textContent = visibleCheckedCount;
-            downloadButton.disabled = visibleCheckedCount === 0;
-            downloadButton.classList.toggle('opacity-50', visibleCheckedCount === 0);
-            downloadButton.classList.toggle('cursor-not-allowed', visibleCheckedCount === 0);
-
-            // Update copy link panels visibility based on visibleCheckedCount
-            copyLinksPanel.classList.toggle('hidden', visibleCheckedCount !== 1);
-            jsonOutputPanel.classList.toggle('hidden', visibleCheckedCount < 1);
-
-            if (visibleCheckedCount === 1) {
-                const selectedCheckbox = visibleCheckedCheckboxes[0];
-                const fullKey = selectedCheckbox.dataset.fullkey;
-                copyHttpsLinkBtn.onclick = () => copyToClipboard(`https://${S3_BUCKET_HOSTNAME}/${fullKey}`, 'HTTPS link');
-                copyS3LinkBtn.onclick = () => copyToClipboard(`s3://${S3_BUCKET_NAME}/${fullKey}`, 'S3 URI'); 
-            } else {
-                // Clear onclick handlers if not exactly 1 visible file is selected
-                copyHttpsLinkBtn.onclick = null;
-                copyS3LinkBtn.onclick = null;
-            }
-            
-            // Crucial fix: Always ensure jsonDisplayArea.value has a valid JSON string
-            if (visibleCheckedCount >= 1) {
-                const visibleCheckedKeys = visibleCheckedCheckboxes.map(cb => cb.dataset.fullkey);
-                jsonDisplayArea.value = JSON.stringify({
-                    http_prefix: `https://${S3_BUCKET_HOSTNAME}/`,
-                    s3_bucket: S3_BUCKET_NAME,
-                    keys: visibleCheckedKeys
-                }, null, 2);
-            } else {
-                // When no files are selected, ensure it's a valid JSON with an empty keys list
-                jsonDisplayArea.value = JSON.stringify({
-                    http_prefix: `https://${S3_BUCKET_HOSTNAME}/`,
-                    s3_bucket: S3_BUCKET_NAME,
-                    keys: []
-                }, null, 2);
-            }
-        }
-
-        /**
-         * Applies the text filter to the results table.
-         */
-        function applyFilter() {
-            const filterText = fileFilterInput.value.toLowerCase().trim();
-            const filterMode = filterIncludeRadio.checked ? 'include' : 'exclude';
-            let visibleFileCount = 0;
-
-            document.querySelectorAll('#results-body tr').forEach(row => {
-                const filename = row.dataset.filename || ''; // Get the filename from data attribute
-                let shouldShow = false;
-
-                if (filterText === '') {
-                    shouldShow = true; // Show all if filter is empty
-                } else {
-                    const includesText = filename.includes(filterText);
-                    if (filterMode === 'include') {
-                        shouldShow = includesText;
-                    } else { // exclude mode
-                        shouldShow = !includesText;
-                    }
-                }
-                
-                row.style.display = shouldShow ? '' : 'none';
-                if (shouldShow) {
-                    visibleFileCount++;
-                }
-            });
-            resultsSummary.textContent = `Displaying ${visibleFileCount} of ${allFetchedFiles.length} files.`;
-            updateSelectedCount(); // Update selections and copy panels based on new visibility
-        }
-
-        /**
-         * Populates the results table with the list of found files.
-         * Stores all files in a global array and then applies the filter.
-         * @param {Array<object>} files - An array of file objects to display.
-         */
-        function updateResultsTable(files) {
-            resultsTableBody.innerHTML = '';
-            allFetchedFiles = files; // Store the full list of files
-
-            if (files.length === 0) {
-                setUIState(false, 'No GFS data found matching your criteria. Please try different selections.');
-                return;
-            }
-            files.forEach(file => {
-                const forecastHourMatch = file.key.match(/\.f(\d{3,4})/);
-                const forecastHour = forecastHourMatch ? parseInt(forecastHourMatch[1], 10) : 'N/A';
-                const row = document.createElement('tr');
-                row.classList.add('hover:bg-gray-100', 'transition-colors', 'duration-150');
-                row.dataset.filename = file.key.toLowerCase(); // Store lowercase filename for case-insensitive filtering
-                row.innerHTML = `
-                    <td class="px-4 py-2 whitespace-nowrap">
-                        <input type="checkbox" data-fullkey="${file.fullKey}" class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 file-checkbox">
-                    </td>
-                    <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-800 font-medium">${file.key}</td>
-                    <td class="px-2 py-2 whitespace-nowrap text-sm text-gray-500">${forecastHour} hr</td>
-                    <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-500">${formatBytes(file.size)}</td>
-                `;
-                resultsTableBody.appendChild(row);
-            });
-            messageArea.classList.add('hidden');
-            resultsActions.classList.remove('hidden');
-            
-            // Apply filter after populating the table
-            applyFilter(); // This will also update resultsSummary and selected count
-            document.querySelectorAll('.file-checkbox').forEach(cb => {
-                cb.addEventListener('change', updateSelectedCount);
-            });
-        }
-        
-        // --- Core Logic ---
-
-        /**
-         * Main function to query S3, filter results, and update the UI.
-         */
-        async function fetchGfsData() {
-            logDebug('Starting GFS data query.');
-            setUIState(true); // This will also hide copy panels
-
-            // 1. Get user selections from the UI.
-            const selectedDate = dateSelector.value.replace(/-/g, '');
-            const selectedCycle = cycleSelector.value;
-            const selectedProduct = productSelector.value;
-            const requestedHours = parseForecastHours(forecastHourSelector.value);
-            logDebug('User Selections:', { date: selectedDate, cycle: selectedCycle, product: selectedProduct, hours: requestedHours ? Array.from(requestedHours) : 'All' });
-            if (!selectedDate) {
-                setUIState(false, 'Please select a valid date.');
-                return;
-            }
-
-            // 2. Construct a specific S3 prefix to minimize the number of files returned by S3,
-            // avoiding irrelevant files like BUFR and improving performance.
-            const productIdentifier = `gfs.t${selectedCycle}z.${selectedProduct}`;
-            const s3Prefix = `gfs.${selectedDate}/${selectedCycle}/atmos/${productIdentifier}`;
-            const apiUrl = `https://${S3_BUCKET_HOSTNAME}/?list-type=2&prefix=${encodeURIComponent(s3Prefix)}`;
-            
-            s3PathDisplay.value = `s3://noaa-gfs-bdp-pds/${s3Prefix}`;
-            logDebug('Constructed specific S3 API URL for query:', apiUrl);
-            
-            // 3. Set up an AbortController for the fetch request to handle timeouts.
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
-
-            try {
-                // Direct fetch attempt
-                const response = await fetch(apiUrl, { signal: controller.signal });
-                
-                clearTimeout(timeoutId); // Clear the timeout if the request was successful.
-
-                if (!response.ok) {
-                     const errorText = await response.text();
-                     throw new Error(`S3 API Error: Status ${response.status}. ${errorText.substring(0, 200)}`);
-                }
-                const xmlText = await response.text();
-                logDebug('Successfully fetched XML from S3.');
-
-                // 6. Parse the XML response from S3.
-                const parser = new DOMParser();
-                const xmlDoc = parser.parseFromString(xmlText, "application/xml");
-                const errorNode = xmlDoc.querySelector('parsererror') || xmlDoc.querySelector('Error');
-                if (errorNode) {
-                    const code = xmlDoc.querySelector('Code')?.textContent;
-                    const message = xmlDoc.querySelector('Message')?.textContent;
-                    throw new Error(`S3 or XML parsing error: ${code || 'Unknown'} - ${message || errorNode.innerText}`);
-                }
-                const contents = xmlDoc.getElementsByTagName('Contents');
-                logDebug(`Found ${contents.length} objects matching the specific prefix.`);
-
-                // 7. Filter the returned file list by the user's selected forecast hours.
-                let filteredFiles = [];
-                for (let item of contents) {
-                    const fullKey = item.getElementsByTagName('Key')[0].textContent;
-                    const key = fullKey.split('/').pop();
-                    const size = parseInt(item.getElementsByTagName('Size')[0].textContent, 10);
-                    
-                    const forecastHourMatch = key.match(/\.f(\d{3,4})/);
-                    if (forecastHourMatch) {
-                        const forecastHour = parseInt(forecastHourMatch[1], 10);
-                        if (requestedHours === null || requestedHours.has(forecastHour)) {
-                            filteredFiles.push({ key, size, fullKey });
-                        }
-                    }
-                }
-                logDebug(`Filtered by forecast hour to ${filteredFiles.length} files.`);
-                
-                // 8. Sort the final list by forecast hour for a logical display order.
-                filteredFiles.sort((a, b) => {
-                    const fhrA = parseInt(a.key.match(/\.f(\d{3,4})/)[1], 10);
-                    const fhrB = parseInt(b.key.match(/\.f(\d{3,4})/)[1], 10);
-                    return fhrA - fhrB;
-                });
-
-                // 9. Update the UI with the final results.
-                updateResultsTable(filteredFiles);
-                setUIState(false);
-
-            } catch (error) {
-                clearTimeout(timeoutId); 
-                if (error.name === 'AbortError') {
-                    logDebug('Fetch aborted due to timeout.');
-                    setUIState(false, `Error: The request timed out after ${FETCH_TIMEOUT / 1000} seconds. The server may be slow. Please try again.`);
-                } else {
-                    logDebug('An error occurred during data fetching:', error);
-                    setUIState(false, `Error: ${error.message}`);
-                }
-            }
-        }
-        
-        /**
-         * Initiates the download of all user-selected files.
-         */
-        function downloadSelectedFiles() {
-            // Get only the visible and checked checkboxes
-            const selectedCheckboxes = Array.from(document.querySelectorAll('#results-body input[type="checkbox"]:checked')).filter(cb => {
-                const row = cb.closest('tr');
-                return row && row.style.display !== 'none';
-            });
-
-            logDebug(`Initiating download for ${selectedCheckboxes.length} visible and selected files.`);
-            if (selectedCheckboxes.length === 0) {
-                showMessage('No files selected for download or no visible files selected.', 'info');
-                return;
-            }
-
-            selectedCheckboxes.forEach((checkbox, index) => {
-                const fullFileKey = checkbox.dataset.fullkey;
-                const fileName = fullFileKey.split('/').pop();
-                const downloadUrl = `${S3_BUCKET_URL_BASE}${fullFileKey}`;
-                
-                // Stagger downloads slightly to prevent browser pop-up blockers.
-                // A small delay helps ensure each download prompt is distinct.
-                setTimeout(() => {
-                    logDebug(`Attempting to download: ${downloadUrl}`);
-                    const a = document.createElement('a');
-                    a.href = downloadUrl;
-                    a.download = fileName; // Suggests a filename for saving
-                    document.body.appendChild(a);
-                    a.click(); // Programmatically click the link
-                    document.body.removeChild(a); // Clean up the element
-                }, index * 200); // 200ms delay between each download
-            });
-            showMessage(`Initiated download for ${selectedCheckboxes.length} files. Please check your browser's download manager.`, 'success');
-        }
-
-        /**
-         * Generates Python code to query GFS data from S3 using boto3.
-         */
-        function generatePythonQueryCode() {
-            const date = dateSelector.value.replace(/-/g, '');
-            const cycle = cycleSelector.value;
-            const product = productSelector.value;
-            const forecastHoursInput = forecastHourSelector.value.trim();
-            const bucketName = S3_BUCKET_NAME;
-
-            let forecastHoursParam = '';
-            if (forecastHoursInput) {
-                // Parse the forecast hours into a Python list representation
-                const parsedHours = Array.from(parseForecastHours(forecastHoursInput) || []).sort((a,b) => a-b);
-                if (parsedHours.length > 0) {
-                    forecastHoursParam = `forecast_hours: Optional[List[int]] = None,`;
-                }
-            }
-
-            const filterTextInput = fileFilterInput.value.trim().toLowerCase();
-            const filterModeInput = filterIncludeRadio.checked ? 'include' : 'exclude';
-
-            let filterParams = '';
-            if (filterTextInput) {
-                filterParams += `filename_filter: Optional[str] = "${filterTextInput}",\n    `;
-                filterParams += `filter_mode: str = "${filterModeInput}",`;
-            }
-
-            const pythonCode = `import boto3
-import os
-import re # For regular expressions to parse forecast hours
-from typing import List, Dict, Optional
-import botocore
-from botocore.config import Config # Import Config for unsigned requests
-
-def query_gfs_data(
-    date: str,
-    cycle: str,
-    product: str,
-    ${forecastHoursParam ? `forecast_hours: Optional[List[int]] = None,\n    ` : ''}${filterParams ? `filename_filter: Optional[str] = None,\n    filter_mode: str = "include",` : ''}
-    bucket_name: str = "${bucketName}"
-) -> Dict:
-    """
-    Queries GFS data from the NOAA Open Data Dissemination program on AWS S3.
-
-    Args:
-        date (str): The date in YYYYMMDD format (e.g., "20230115").
-        cycle (str): The GFS cycle run time (e.g., "00", "06", "12", "18").
-        product (str): The GFS product category (e.g., "pgrb2.0p25", "pgrb2.0p50").
-        ${forecastHoursParam ? 'forecast_hours (Optional[List[int]]): A list of specific forecast hours to filter by (e.g., [0, 3, 6]). If None, all available hours for the given prefix are returned.' : ''}
-        ${filterParams ? 'filename_filter (Optional[str]): A substring to filter filenames by. Case-insensitive.\n        filter_mode (str): "include" to keep files containing the substring, "exclude" to remove them. Default is "include".' : ''}
-        bucket_name (str): The S3 bucket name. Default is "${bucketName}".
-
-    Returns:
-        Dict: A dictionary containing the bucket name and a list of full S3 object keys.
-              Example: {"bucket_name": "noaa-gfs-bdp-pds", "keys": ["gfs.20230115/00/atmos/gfs.t00z.pgrb2.0p25.f000.grib2", ...]}
-    """
-    # Use unsigned requests for public buckets
-    s3_client = boto3.client('s3', config=Config(signature_version=botocore.UNSIGNED))
-    
-    # Construct the S3 prefix based on input parameters
-    s3_prefix = f"gfs.{date}/{cycle}/atmos/gfs.t{cycle}z.{product}"
-    print(f"Querying S3 prefix: s3://{bucket_name}/{s3_prefix}")
-
-    all_keys = []
-    paginator = s3_client.get_paginator('list_objects_v2')
-    pages = paginator.paginate(Bucket=bucket_name, Prefix=s3_prefix)
-
-    for page in pages:
-        if 'Contents' in page:
-            for obj in page['Contents']:
-                full_key = obj['Key']
-                filename_lower = os.path.basename(full_key).lower()
-                
-                # Apply filename filtering
-                if filename_filter:
-                    if filter_mode == "include" and filename_filter not in filename_lower:
-                        continue # Skip if include and filter text not found
-                    if filter_mode == "exclude" and filename_filter in filename_lower:
-                        continue # Skip if exclude and filter text found
-
-                # Extract forecast hour from filename for filtering
-                f_hour_match = re.search(r'\\.f(\\d{3,4})', filename_lower) # Use regex for robustness
-                forecast_hour = int(f_hour_match.group(1)) if f_hour_match else None
-
-                # Apply forecast hour filtering if specified
-                if forecast_hours is None or (forecast_hour is not None and forecast_hour in forecast_hours):
-                    all_keys.append(full_key)
-    
-    # Sort keys by forecast hour for consistent order
-    # Ensure keys are valid for sorting if forecast_hour is None
-    all_keys.sort(key=lambda k: int(re.search(r'\\.f(\\d{3,4})', os.path.basename(k).lower()).group(1)) if re.search(r'\\.f(\\d{3,4})', os.path.basename(k).lower()) else 0)
-
-
-    return {"bucket_name": bucket_name, "keys": all_keys}
-
-# Example usage with current UI parameters:
-if __name__ == "__main__":
-    current_date = "${date}"
-    current_cycle = "${cycle}"
-    current_product = "${product}"
-    current_forecast_hours = ${forecastHoursInput ? JSON.stringify(Array.from(parseForecastHours(forecastHoursInput) || []).sort((a,b) => a-b)) : 'None'}
-    current_filename_filter = ${filterTextInput ? `"${filterTextInput}"` : 'None'}
-    current_filter_mode = "${filterModeInput}"
-
-    print(f"Attempting to query GFS data for Date: {current_date}, Cycle: {current_cycle}, Product: {current_product}")
-    if current_forecast_hours is not None:
-        print(f"Filtering for Forecast Hours: {current_forecast_hours}")
-    if current_filename_filter is not None:
-        print(f"Applying filename filter: '{current_filename_filter}' in '{current_filter_mode}' mode.")
-
-
-    results = query_gfs_data(
-        date=current_date, 
-        cycle=current_cycle, 
-        product=current_product, 
-        forecast_hours=current_forecast_hours,
-        filename_filter=current_filename_filter,
-        filter_mode=current_filter_mode
-    )
-
-    print("\\n--- Query Results ---")
-    print(f"Bucket: {results['bucket_name']}")
-    print(f"Found {len(results['keys'])} keys.")
-    for key in results['keys']:
-        print(f"- {key}")
-`;
-            copyToClipboard(pythonCode, 'Python Query Code');
-        }
-
-        /**
-         * Generates Python code to download files based on a provided JSON list.
-         */
-        function generatePythonDownloadCode() {
-            const currentJsonData = jsonDisplayArea.value; // This now reliably contains valid JSON
-            const bucketName = S3_BUCKET_NAME;
-
-            let parsedJson = {};
-            try {
-                parsedJson = JSON.parse(currentJsonData);
-            } catch (e) {
-                // This catch block should ideally not be hit with the fix in updateSelectedCount
-                showMessage("Error parsing selected files JSON. Please ensure valid selections.", 'error');
-                logDebug("Error parsing JSON for Python download code:", e);
-                return;
-            }
-
-            // This check ensures we don't generate code that will immediately say "no files"
-            // if the user hasn't selected anything or the query yielded nothing.
-            // The Python script itself will also handle the 'keys' list being empty.
-            if (!parsedJson.keys || parsedJson.keys.length === 0) {
-                 showMessage("No files selected to generate download code. Please select files in the table first.", 'info');
-                 return;
-            }
-
-            // The content to be inserted into Python code.
-            // Ensure it's pretty-printed for readability in the generated Python.
-            const jsonForPython = JSON.stringify(parsedJson, null, 4);
-
-
-            const pythonCode = `import boto3
-import os
-import json
-from typing import Dict, List
-import botocore
-from botocore.config import Config # Import Config for unsigned requests
-
-def download_gfs_files(
-    gfs_data_json: Dict,
-    output_folder: str = "gfs_downloads"
-):
-    """
-    Downloads GFS files from S3 based on a provided JSON data structure.
-
-    Args:
-        gfs_data_json (Dict): A dictionary containing 's3_bucket' and 'keys'
-                              (list of S3 object keys).
-                              Example: {"s3_bucket": "noaa-gfs-bdp-pds", "keys": ["key1", "key2"]}
-        output_folder (str): The local directory where files will be downloaded.
-    """
-    if not gfs_data_json or "s3_bucket" not in gfs_data_json or "keys" not in gfs_data_json:
-        print("Error: Invalid JSON data provided. Expected dictionary with 's3_bucket' and 'keys'.")
-        return
-
-    s3_bucket = gfs_data_json["s3_bucket"]
-    s3_keys = gfs_data_json["keys"]
-
-    if not s3_keys:
-        print("No files to download in the provided JSON data.")
-        return
-
-    # Use unsigned requests for public buckets
-    s3_client = boto3.client('s3', config=Config(signature_version=botocore.UNSIGNED))
-    
-    # Create the output folder if it doesn't exist
-    os.makedirs(output_folder, exist_ok=True)
-    print(f"Ensuring output directory '{output_folder}' exists.")
-
-    print(f"Starting download of {len(s3_keys)} files from bucket '{s3_bucket}' to '{output_folder}'...")
-    for i, s3_key in enumerate(s3_keys):
-        local_filepath = os.path.join(output_folder, os.path.basename(s3_key))
-        try:
-            print(f"[{i+1}/{len(s3_keys)}] Downloading s3://{s3_bucket}/{s3_key} to {local_filepath}")
-            s3_client.download_file(s3_bucket, s3_key, local_filepath)
-            print(f"Downloaded: {os.path.basename(s3_key)}")
-        except Exception as e:
-            print(f"Error downloading {s3_key}: {e}")
-    print("Download process complete.")
-
-# Example usage with the current selected files (assuming this JSON is loaded dynamically):
-if __name__ == "__main__":
-    # This dictionary would typically be loaded from a file or another source.
-    # For demonstration, it reflects the content of the "Selected Files JSON" area.
-    selected_gfs_files = ${jsonForPython}
-
-    download_gfs_files(selected_gfs_files)
-`;
-            copyToClipboard(pythonCode, 'Python Download Code');
-        }
-
-
-        // --- Event Listeners & Initialization ---
-        
-        /**
-         * Main entry point when the page is loaded. Sets up default values and event listeners.
-         */
-        window.addEventListener('load', () => {
-            logDebug('Page loaded. Initializing application.');
-            
-            // Set default date to yesterday UTC as recent data is more likely to be complete.
-            const yesterday = new Date();
-            yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-            dateSelector.value = yesterday.toISOString().split('T')[0];
-            logDebug('Default date set to:', dateSelector.value);
-
-            // Attach event listeners to UI controls.
-            queryButton.addEventListener('click', fetchGfsData);
-            downloadButton.addEventListener('click', downloadSelectedFiles);
-            selectAllCheckbox.addEventListener('change', () => {
-                const isChecked = selectAllCheckbox.checked;
-                // Only affect visible checkboxes
-                document.querySelectorAll('#results-body input[type="checkbox"]').forEach(cb => {
-                    const row = cb.closest('tr');
-                    if (row && row.style.display !== 'none') {
-                        cb.checked = isChecked;
-                    }
-                });
-                updateSelectedCount();
-            });
-            
-            // Listen for changes on individual file checkboxes to update copy link panel
-            resultsTableBody.addEventListener('change', (event) => {
-                if (event.target.classList.contains('file-checkbox')) {
-                    updateSelectedCount();
-                }
-            });
-
-            // Allow pressing 'Enter' in the forecast hour input to trigger a query.
-            forecastHourSelector.addEventListener('keyup', (event) => {
-                if (event.key === 'Enter') {
-                    event.preventDefault(); // Prevent form submission behavior
-                    queryButton.click();
-                }
-            });
-
-            // Event listeners for the file filter
-            fileFilterInput.addEventListener('input', applyFilter);
-            filterIncludeRadio.addEventListener('change', applyFilter);
-            filterExcludeRadio.addEventListener('change', applyFilter);
-
-            // Event listeners for Python code generation buttons
-            copyQueryPythonBtn.addEventListener('click', generatePythonQueryCode);
-            downloadPythonBtn.addEventListener('click', generatePythonDownloadCode);
-
-            // Initial event listeners for the copy buttons (will be dynamically overridden)
-            copyHttpsLinkBtn.addEventListener('click', () => { /* Handled by dynamic onclick */ });
-            copyS3LinkBtn.addEventListener('click', () => { /* Handled by dynamic onclick */ });
-            copyJsonBtn.addEventListener('click', () => copyToClipboard(jsonDisplayArea.value, 'JSON'));
-        });
-
-    </script>
+    <script type="module" src="main.js"></script>
 </body>
 </html>
