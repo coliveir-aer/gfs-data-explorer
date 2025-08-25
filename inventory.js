@@ -149,6 +149,20 @@ function renderInventoryUI(inventoryData, elements) {
     }
 }
 
+async function fetchByteRanges(fileUrl, rangesToFetch) {
+    const fetchPromises = rangesToFetch.map(range => {
+        const headers = { Range: `bytes=${range.start}-${range.end || ''}` };
+        return fetch(fileUrl, { headers });
+    });
+    const responses = await Promise.all(fetchPromises);
+    
+    for(const res of responses) {
+        if (!res.ok) throw new Error(`Failed to fetch byte range: ${res.statusText}`);
+    }
+    const arrayBuffers = await Promise.all(responses.map(res => res.arrayBuffer()));
+    return new Blob(arrayBuffers, { type: 'application/octet-stream' });
+}
+
 async function getSelectedGribSubsetBlob(elements) {
     const checkedBoxes = document.querySelectorAll('.inventory-checkbox:checked');
     if (checkedBoxes.length === 0) {
@@ -164,17 +178,7 @@ async function getSelectedGribSubsetBlob(elements) {
     }));
 
     try {
-        const fetchPromises = rangesToFetch.map(range => {
-            const headers = { Range: `bytes=${range.start}-${range.end || ''}` };
-            return fetch(gribFileUrl, { headers });
-        });
-        const responses = await Promise.all(fetchPromises);
-        
-        for(const res of responses) {
-            if (!res.ok) throw new Error(`Failed to fetch byte range: ${res.statusText}`);
-        }
-        const arrayBuffers = await Promise.all(responses.map(res => res.arrayBuffer()));
-        return new Blob(arrayBuffers, { type: 'application/octet-stream' });
+        return await fetchByteRanges(gribFileUrl, rangesToFetch);
     } catch (error) {
         console.error('Error downloading subset:', error);
         showMessage(elements.messageBox, `Error creating subset: ${error.message}`, 'error');
@@ -195,6 +199,81 @@ function triggerDownload(blob, filename, elements) {
     showMessage(elements.messageBox, 'Download complete!', 'success');
 }
 
+async function processMultiFileSubset(elements) {
+    const subsetTemplate = Array.from(document.querySelectorAll('.inventory-checkbox:checked')).map(cb => {
+        const levelLabel = cb.nextElementSibling.textContent;
+        const productHeader = cb.closest('.p-2.border').previousElementSibling;
+        const productName = productHeader.querySelector('.product-name').textContent;
+        return { productName, level: levelLabel };
+    });
+
+    if (subsetTemplate.length === 0) {
+        showMessage(elements.messageBox, 'Please select at least one variable for the subset.', 'info');
+        return;
+    }
+
+    const targetFiles = Array.from(document.querySelectorAll('#results-body input.file-checkbox:checked'))
+        .filter(cb => cb.closest('tr').style.display !== 'none')
+        .map(cb => cb.dataset.fullkey);
+
+    const zip = new JSZip();
+    setUIState(elements, true, 'Starting subset process...');
+    
+    let successCount = 0;
+    try {
+        for (let i = 0; i < targetFiles.length; i++) {
+            const fileKey = targetFiles[i];
+            const fileName = fileKey.split('/').pop();
+            setUIState(elements, true, `Processing file ${i + 1} of ${targetFiles.length}: ${fileName}`);
+
+            try {
+                const idxUrl = `${S3_BUCKET_URL_BASE}${fileKey}.idx`;
+                const response = await fetch(idxUrl);
+                if (!response.ok) throw new Error(`Could not fetch index for ${fileName}`);
+                const idxText = await response.text();
+                const inventoryData = parseAndGroupInventory(idxText);
+                
+                const rangesToFetch = [];
+                subsetTemplate.forEach(templateItem => {
+                    const productLevels = inventoryData[templateItem.productName];
+                    if (productLevels) {
+                        const levelItem = productLevels.find(item => item.level === templateItem.level);
+                        if (levelItem) {
+                            rangesToFetch.push({ start: levelItem.startByte, end: levelItem.endByte });
+                        }
+                    }
+                });
+                
+                if (rangesToFetch.length > 0) {
+                    const gribFileUrl = `${S3_BUCKET_URL_BASE}${fileKey}`;
+                    const blob = await fetchByteRanges(gribFileUrl, rangesToFetch);
+                    zip.file(`subset_${fileName}`, blob);
+                    successCount++;
+                }
+            } catch (fileError) {
+                console.warn(`Skipping file ${fileName} due to error:`, fileError);
+            }
+        }
+    } catch (error) {
+         showMessage(elements.messageBox, `An error occurred: ${error.message}`, 'error');
+         setUIState(elements, false);
+         return;
+    }
+
+    if (successCount > 0) {
+         setUIState(elements, true, 'Generating ZIP file...');
+         const zipBlob = await zip.generateAsync({ type: "blob" });
+         const date = document.getElementById('date-selector').value.replace(/-/g, '');
+         const cycle = document.getElementById('cycle-selector').value;
+         triggerDownload(zipBlob, `gfs_subset_${date}_t${cycle}z.zip`, elements);
+    } else {
+         showMessage(elements.messageBox, 'No data could be subsetted for the selected files.', 'info');
+    }
+
+    setUIState(elements, false);
+    showInventoryView(elements, false);
+}
+
 export function setupInventoryPanelListeners(elements) {
     logDebug('Initializing inventory panel listeners...');
     
@@ -213,9 +292,13 @@ export function setupInventoryPanelListeners(elements) {
     });
 
     elements.downloadSubsetBtn.addEventListener('click', async () => {
-        const gribBlob = await getSelectedGribSubsetBlob(elements);
-        if (gribBlob) {
-            triggerDownload(gribBlob, `subset_${currentGribFileKey.split('/').pop()}`, elements);
+        if (elements.downloadSubsetBtn.textContent.includes('ZIP')) {
+            await processMultiFileSubset(elements);
+        } else {
+            const gribBlob = await getSelectedGribSubsetBlob(elements);
+            if (gribBlob) {
+                triggerDownload(gribBlob, `subset_${currentGribFileKey.split('/').pop()}`, elements);
+            }
         }
     });
 
@@ -229,9 +312,26 @@ export function setupInventoryPanelListeners(elements) {
     });
 }
 
-async function processGribInventory(gribFullKey, elements) {
+async function processGribInventory(gribFullKey, elements, options = { isTemplateMode: false, count: 0 }) {
     currentGribFileKey = gribFullKey;
     elements.inventoryColumn.dataset.gribFileKey = gribFullKey;
+
+    const existingInfoText = elements.inventoryColumn.querySelector('p.text-sm.text-blue-700');
+    if (existingInfoText) existingInfoText.remove();
+    
+    if (options.isTemplateMode) {
+        elements.inventoryColumn.querySelector('h2').textContent = 'Define Subset Template';
+        const infoText = document.createElement('p');
+        infoText.className = 'text-sm text-blue-700 bg-blue-100 p-2 rounded-md mb-3';
+        infoText.innerHTML = `Inventory from <strong>${gribFullKey.split('/').pop()}</strong>. Selections will be applied to all <strong>${options.count}</strong> checked files.`;
+        const titleElement = elements.inventoryColumn.querySelector('h2');
+        titleElement.parentNode.insertBefore(infoText, titleElement.nextSibling);
+
+        elements.downloadSubsetBtn.textContent = `Download Subset ZIP (${options.count} files)`;
+    } else {
+        elements.inventoryColumn.querySelector('h2').textContent = 'GRIB Inventory';
+        elements.downloadSubsetBtn.textContent = 'Download GRIB Subset';
+    }
 
     elements.inventoryListContainer.innerHTML = '<div class="text-center p-4">Fetching and processing index file...</div>';
     showInventoryView(elements, true);
@@ -254,6 +354,12 @@ async function processGribInventory(gribFullKey, elements) {
         elements.inventoryListContainer.innerHTML = `<div class="text-center p-4 text-red-600">Error: ${error.message}</div>`;
         setUIState(elements, false);
     }
+}
+
+export function startSubsetTemplateMode(selectedCheckboxes, elements) {
+    const firstFileKey = selectedCheckboxes[0].dataset.fullkey;
+    const totalFiles = selectedCheckboxes.length;
+    processGribInventory(firstFileKey, elements, { isTemplateMode: true, count: totalFiles });
 }
 
 export function addInventoryButtons(elements) {

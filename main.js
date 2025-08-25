@@ -1,6 +1,6 @@
 import { logDebug, parseForecastHours, copyToClipboard } from './utils.js';
 import { showMessage, setUIState, showInventoryView, updateSelectedCount, applyFilter } from './ui.js';
-import { setupInventoryPanelListeners } from './inventory.js';
+import { setupInventoryPanelListeners, startSubsetTemplateMode } from './inventory.js';
 import { fetchGfsData } from './gfs-api.js';
 import { S3_BUCKET_NAME, S3_BUCKET_URL_BASE } from './config.js';
 
@@ -38,6 +38,7 @@ const domElements = {
     inventoryFilterInput: document.getElementById('inventory-filter-input'),
     downloadSubsetBtn: document.getElementById('download-subset-btn'),
     clearAllBtn: document.getElementById('clear-all-btn'),
+    defineSubsetButton: document.getElementById('define-subset-button'), // New button
     messageBox: document.createElement('div')
 };
 domElements.messageBox.className = 'message-box opacity-0 hidden';
@@ -179,6 +180,19 @@ window.addEventListener('load', () => {
 
     domElements.queryButton.addEventListener('click', () => fetchGfsData(domElements));
     domElements.downloadButton.addEventListener('click', downloadSelectedFiles);
+
+    domElements.defineSubsetButton.addEventListener('click', () => {
+        const selectedCheckboxes = Array.from(document.querySelectorAll('#results-body input[type="checkbox"]:checked')).filter(cb => {
+            const row = cb.closest('tr');
+            return row && row.style.display !== 'none';
+        });
+        if (selectedCheckboxes.length > 0) {
+            startSubsetTemplateMode(selectedCheckboxes, domElements);
+        } else {
+            showMessage(domElements.messageBox, 'Please select at least one file to define a subset.', 'info');
+        }
+    });
+
     domElements.selectAllCheckbox.addEventListener('change', () => {
         const isChecked = domElements.selectAllCheckbox.checked;
         document.querySelectorAll('#results-body input[type="checkbox"]').forEach(cb => {

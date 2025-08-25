@@ -29,7 +29,8 @@ export function setUIState(elements, isLoading, message = null) {
     }
 
     if (message) {
-        if (message !== 'Fetching GRIB Index...') {
+        const isProgressMessage = message.startsWith('Processing file') || message.startsWith('Generating ZIP') || message.startsWith('Starting subset');
+        if (message !== 'Fetching GRIB Index...' && !isProgressMessage) {
             elements.resultsTableBody.innerHTML = '';
             elements.resultsActions.classList.add('hidden');
             elements.copyLinksPanel.classList.add('hidden');
@@ -69,6 +70,11 @@ export function updateSelectedCount(elements) {
     elements.downloadButton.disabled = visibleCheckedCount === 0;
     elements.downloadButton.classList.toggle('opacity-50', visibleCheckedCount === 0);
     elements.downloadButton.classList.toggle('cursor-not-allowed', visibleCheckedCount === 0);
+
+    // Manage new subset button state
+    elements.defineSubsetButton.disabled = visibleCheckedCount === 0;
+    elements.defineSubsetButton.classList.toggle('opacity-50', visibleCheckedCount === 0);
+    elements.defineSubsetButton.classList.toggle('cursor-not-allowed', visibleCheckedCount === 0);
 
     elements.copyLinksPanel.classList.toggle('hidden', visibleCheckedCount !== 1);
     elements.jsonOutputPanel.classList.toggle('hidden', visibleCheckedCount < 1);
